@@ -1,0 +1,24 @@
+{
+    "manifest_version": 3,
+    "name": "Email Assistant",
+    "version": "1.0",
+    "description": "Manage input field values",
+    "permissions": [
+      "activeTab",
+      "storage"
+    ],
+    "action": {
+      "default_popup": "popup.html"
+    },
+    "content_scripts": [
+      {
+        "matches": ["<all_urls>"],
+        "js": ["content.js"],
+        "css": ["panel.css"]
+      }
+    ]
+  }
+    
+    
+    
+    
