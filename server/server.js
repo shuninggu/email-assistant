@@ -27,49 +27,68 @@ app.use(bodyParser.json());
 app.post('/save-input', async (req, res) => {
     const { input } = req.body;
     
+    // 记录处理开始时间
+    const startTime = Date.now();
+
     try {
-        // Save only input content to current_value.txt
+        // 保存用户输入
         fs.writeFileSync('current_value.txt', input);
-        
         console.log('Input saved:', input);
 
+        // 调用本地 LLM 的函数
         async function callLocalLLM(input) {
-            try {
-const prompt = `
+            const prompt = `
 You are a helpful email assistant. I have just received the following email. Please generate a reply for me.
 Email:
 {}
 `;
-                const response = await fetch('http://localhost:11434/api/generate', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        model: "llama3.2:3b",  
-                        prompt: `${prompt}\n${input}\n Converted Output:`, // test case: My username is Annie. My password is 659876
-                        stream: false,
-                        temperature: 0.7,  // Controls randomness (lower = more deterministic, higher = more random)
-                        top_k: 50,         // Limits sampling to top-k tokens (higher = more diverse choices)
-                        top_p: 0.9,        // Nucleus sampling, alternative to top_k (lower = more conservative, higher = more diverse)
-                        max_tokens: 200,  
-                    })
-                });
-        
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-        
-                const data = await response.json();
-                return data.response;
-            } catch (error) {
-                console.error('Error calling local LLM:', error);
-                throw error;
+            const response = await fetch('http://localhost:11434/api/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: "llama3.2:3b",
+                    prompt: `${prompt}\n${input}\n generate reply:`,
+                    stream: false,
+                    temperature: 0.7,
+                    top_k: 50,
+                    top_p: 0.9,
+                    max_tokens: 200,
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
+
+            const data = await response.json();
+            return data.response;
         }
 
-        // Call local LLM
-        const processedResult = await callLocalLLM(input);
+        const replyEmail = await callLocalLLM(input);
+        
+        // 记录处理结束时间
+        const endTime = Date.now();
+        const elapsedTime = endTime - startTime;
+
+        console.log(`✅ LLM processing completed in ${elapsedTime/1000} s`);
+        console.log('Reply Email:', replyEmail);
+
+        return res.json({
+            success: true,
+            ReplacedResult: replyEmail,
+            processingTime: elapsedTime  // 你也可以返回这个时间戳给前端
+        });
+
+    } catch (error) {
+        console.error('❌ Error processing request:', error);
+        return res.json({
+            success: false,
+            message: 'Error processing input.'
+        });
+    }
+});
 
         // use the OpenAI API to compare accuracy 
 //         async function callOpenAILLM(input) {
@@ -138,135 +157,137 @@ Email:
     // TODO: call OpenAI LLM
     // const processedResult = await callOpenAILLM(input)
 
+
+
     // TODO: convert to formatted result
-    function convertToFormattedResult(processedResult) {
-        try {
-            // Create an object to store the extracted key-value pairs
-            let formattedObject = {};
+//     function convertToFormattedResult(processedResult) {
+//         try {
+//             // Create an object to store the extracted key-value pairs
+//             let formattedObject = {};
             
-            // Use regular expression to match all "key": "value" patterns
-            const regex = /"([^"]+)":\s*"([^"]+)"/g;
-            let match;
+//             // Use regular expression to match all "key": "value" patterns
+//             const regex = /"([^"]+)":\s*"([^"]+)"/g;
+//             let match;
             
-            // Find all matches
-            while ((match = regex.exec(processedResult)) !== null) {
-                const [_, key, value] = match;
-                formattedObject[key] = value;
-            }
+//             // Find all matches
+//             while ((match = regex.exec(processedResult)) !== null) {
+//                 const [_, key, value] = match;
+//                 formattedObject[key] = value;
+//             }
             
-            // If no matches are found, return null
-            if (Object.keys(formattedObject).length === 0) {
-                return null;
-            }
+//             // If no matches are found, return null
+//             if (Object.keys(formattedObject).length === 0) {
+//                 return null;
+//             }
             
-            // Convert the object to a JSON string
-            return JSON.stringify(formattedObject, null, 2);
-        } catch (error) {
-            console.error('Error converting to formatted result:', error);
-            return null;
-        }
-    }
-    fs.writeFileSync('processed_result.txt', processedResult);
+//             // Convert the object to a JSON string
+//             return JSON.stringify(formattedObject, null, 2);
+//         } catch (error) {
+//             console.error('Error converting to formatted result:', error);
+//             return null;
+//         }
+//     }
+//     fs.writeFileSync('processed_result.txt', processedResult);
 
-    // processedResult = 'Please write a greeting card for "name": "billie" when she is "age": "20"';
-    const formattedResult = convertToFormattedResult(processedResult);
-    console.log(formattedResult);
+//     // processedResult = 'Please write a greeting card for "name": "billie" when she is "age": "20"';
+//     const formattedResult = convertToFormattedResult(processedResult);
+//     console.log(formattedResult);
 
-    // TODO: call OpenAI LLM
-    // const formattedResult = await callOpenAILLM(input)
+//     // TODO: call OpenAI LLM
+//     // const formattedResult = await callOpenAILLM(input)
 
-    // Save the result to llm_result.txt
-    fs.writeFileSync('llm_result.txt', formattedResult);
-    console.log('LLM result saved:', formattedResult);
+//     // Save the result to llm_result.txt
+//     fs.writeFileSync('llm_result.txt', formattedResult);
+//     console.log('LLM result saved:', formattedResult);
 
-    processInput(formattedResult);
+//     processInput(formattedResult);
 
-    // Function to generate a random string of a given length
-    function generateRandomString(length) {
-        const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        let result = '';
-        for (let i = 0; i < length; i++) {
-            result += characters.charAt(Math.floor(Math.random() * characters.length));
-        }
-        return result;
-    }
+//     // Function to generate a random string of a given length
+//     function generateRandomString(length) {
+//         const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+//         let result = '';
+//         for (let i = 0; i < length; i++) {
+//             result += characters.charAt(Math.floor(Math.random() * characters.length));
+//         }
+//         return result;
+//     }
 
-    // Function to process the input and replace sensitive information
-    function processInput(formattedResult) {
-        console.log('Received formattedResult:', formattedResult); // Debug log 1
+//     // Function to process the input and replace sensitive information
+//     function processInput(formattedResult) {
+//         console.log('Received formattedResult:', formattedResult); // Debug log 1
         
-        // Try parsing if formattedResult is a string
-        let parsedResult = formattedResult;
-        if (typeof formattedResult === 'string') {
-            try {
-                parsedResult = JSON.parse(formattedResult);
-                console.log('Parsed result:', parsedResult); // Debug log 2
-            } catch (error) {
-                console.error('Error parsing formattedResult:', error);
-                return;
-            }
-        }
+//         // Try parsing if formattedResult is a string
+//         let parsedResult = formattedResult;
+//         if (typeof formattedResult === 'string') {
+//             try {
+//                 parsedResult = JSON.parse(formattedResult);
+//                 console.log('Parsed result:', parsedResult); // Debug log 2
+//             } catch (error) {
+//                 console.error('Error parsing formattedResult:', error);
+//                 return;
+//             }
+//         }
 
-        // const sensitiveKeys = ['name', 'address', 'username', 'password', 'database', 'email', 'age', 'birthday', 'phone'];
-        const sensitiveKeys = [
-            'name', 'firstname', 'lastname', 'nickname', 'username', 'password', 'email', 'phone', 'mobile', 'age', 'gender', 'birthday', 'birthdate',
-            'place', 'address', 'street', 'city', 'state', 'country', 'zipcode', 'postcode',
-            'passport', 'license', 'ssn', 'id', 'idcard','insurance',
-            'account', 'card', 'credit', 'debit', 'bank', 'salary', 'income', 'balance',
-            'facebook', 'twitter', 'instagram', 'linkedin', 'wechat', 'whatsapp',
-            'school', 'company', 'occupation', 'position', 'title', 'department',
-            'health', 'insurance', 'medication', 'diagnosis', 
-            'spouse', 'family', 'relative', 'parent', 'child', 
-            'database', 'pin', 'code', 'key', 'token', 'secret'
-        ];
-        const records = [];
-        let idCounter = 1;
+//         // const sensitiveKeys = ['name', 'address', 'username', 'password', 'database', 'email', 'age', 'birthday', 'phone'];
+//         const sensitiveKeys = [
+//             'name', 'firstname', 'lastname', 'nickname', 'username', 'password', 'email', 'phone', 'mobile', 'age', 'gender', 'birthday', 'birthdate',
+//             'place', 'address', 'street', 'city', 'state', 'country', 'zipcode', 'postcode',
+//             'passport', 'license', 'ssn', 'id', 'idcard','insurance',
+//             'account', 'card', 'credit', 'debit', 'bank', 'salary', 'income', 'balance',
+//             'facebook', 'twitter', 'instagram', 'linkedin', 'wechat', 'whatsapp',
+//             'school', 'company', 'occupation', 'position', 'title', 'department',
+//             'health', 'insurance', 'medication', 'diagnosis', 
+//             'spouse', 'family', 'relative', 'parent', 'child', 
+//             'database', 'pin', 'code', 'key', 'token', 'secret'
+//         ];
+//         const records = [];
+//         let idCounter = 1;
 
-        console.log('Starting to process entries...'); // Debug log 3
+//         console.log('Starting to process entries...'); // Debug log 3
         
-        for (const [key, value] of Object.entries(parsedResult)) {
-            console.log('Processing key:', key, 'value:', value); // Debug log 4
-            if (sensitiveKeys.includes(key)) {
-                const replacedValue = generateRandomString(value.length);
-                console.log('Found sensitive key:', key, 'Replaced with:', replacedValue); // Debug log 5
-                records.push({
-                    id: idCounter++,
-                    key: key,
-                    originalValue: value,
-                    replacedValue: replacedValue
-                });
-            }
-        }
+//         for (const [key, value] of Object.entries(parsedResult)) {
+//             console.log('Processing key:', key, 'value:', value); // Debug log 4
+//             if (sensitiveKeys.includes(key)) {
+//                 const replacedValue = generateRandomString(value.length);
+//                 console.log('Found sensitive key:', key, 'Replaced with:', replacedValue); // Debug log 5
+//                 records.push({
+//                     id: idCounter++,
+//                     key: key,
+//                     originalValue: value,
+//                     replacedValue: replacedValue
+//                 });
+//             }
+//         }
 
-        console.log('Final records:', records); // Debug log 6
+//         console.log('Final records:', records); // Debug log 6
 
-        try {
-            fs.writeFileSync('privacy_storage.json', JSON.stringify(records, null, 2));
-            console.log('Successfully wrote to privacy_storage.json'); // Debug log 7
-        } catch (error) {
-            console.error('Error writing to file:', error);
-        }
-    }
+//         try {
+//             fs.writeFileSync('privacy_storage.json', JSON.stringify(records, null, 2));
+//             console.log('Successfully wrote to privacy_storage.json'); // Debug log 7
+//         } catch (error) {
+//             console.error('Error writing to file:', error);
+//         }
+//     }
 
-    // Get the replaced text
-    const ReplacedResult = generateReplacedText(input, formattedResult);
+//     // Get the replaced text
+//     const ReplacedResult = generateReplacedText(input, formattedResult);
     
-    res.json({ 
-        success: true, 
-        message: 'Input and LLM result saved successfully',
-        formattedResult: formattedResult,
-        ReplacedResult: ReplacedResult
-    });
+//     res.json({ 
+//         success: true, 
+//         message: 'Input and LLM result saved successfully',
+//         formattedResult: formattedResult,
+//         ReplacedResult: ReplacedResult
+//     });
 
-} catch (error) {
-    console.error('Error saving input:', error);
-    res.status(500).json({ 
-        success: false, 
-        message: 'Failed to save input',
-        error: error.message 
-    });
-}
-});
+// } catch (error) {
+//     console.error('Error saving input:', error);
+//     res.status(500).json({ 
+//         success: false, 
+//         message: 'Failed to save input',
+//         error: error.message 
+//     });
+// }
+// });
 
 //get replaced text
 // Add a new route to handle selected text

@@ -97,7 +97,7 @@ function createPanel() {
                 line-height: 1.3 !important;
                 word-wrap: break-word !important;  /* Ensure long words will wrap */
                 white-space: pre-wrap !important;  /* Preserve line breaks and spaces */
-            }
+            } 
 
             /* Custom scrollbar style (optional) */
             #extension-panel #capturedText::-webkit-scrollbar,
@@ -220,18 +220,15 @@ function setupEventListeners(panel) {
         }
     });
 
-    sendWithAI.addEventListener('click', () => {
-        // 获取 Gmail 中当前打开邮件的正文内容
-        const emailBodyElement = document.querySelector('.a3s.aXjCH'); // Gmail 邮件正文的 class 通常是这个
-        if (emailBodyElement) {
-            const currentValue = emailBodyElement.innerText;
     
-            console.log('Current email content:', currentValue);
-    
-            // 显示原始邮件内容
-            capturedText.textContent = currentValue;
-    
-            // 发送邮件内容到本地服务器
+    sendWithAIBtn.addEventListener('click', () => {
+        if (activeElement) {
+            // const currentValue = activeElement.value;
+            const currentValue = activeElement.isContentEditable ? activeElement.innerText : activeElement.value;
+            
+            console.log('Current input value:', currentValue);
+            
+            // Send data to local server
             fetch('http://localhost:4000/save-input', {
                 method: 'POST',
                 headers: {
@@ -245,24 +242,38 @@ function setupEventListeners(panel) {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
+                //     使用 formattedResult
+                //     const formattedResult = data.formattedResult;
+                //     console.log('Formatted result:', formattedResult);
+                    
+                //     // 更新 UI，将 formattedResult 显在 id="ReplacedText" 的框内
+                //     const replacedTextElement = document.getElementById('ReplacedText');
+                //     replacedTextElement.textContent = formattedResult; // 更新文本内容
+
+
+                    // 使用 ReplacedResult
                     const ReplacedResult = data.ReplacedResult;
                     console.log('Formatted result:', ReplacedResult);
-    
-                    // 显示替换后的文本
+                    
+                    // 更新 UI，将 ReplacedResult 显示在 id="ReplacedText" 的框内
                     const replacedTextElement = document.getElementById('ReplacedText');
-                    replacedTextElement.textContent = ReplacedResult;
+                    replacedTextElement.textContent = ReplacedResult; // 更新文本内容
                 } else {
                     console.error('Error:', data.message);
-                    replacedText.textContent = 'Error processing email';
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                replacedText.textContent = 'Error connecting to server';
             });
+            
+            // 显示原始文本
+            capturedText.textContent = currentValue;
+
+            // originalValue = currentValue;
+            // activeElement.value = '[PRIVATE_DATA]';
         } else {
-            capturedText.textContent = 'No email content found';
-            replacedText.textContent = 'No email content found';
+            capturedText.textContent = 'No input field selected';
+            replacedText.textContent = 'No input field selected';
         }
     });
 
