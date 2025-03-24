@@ -222,58 +222,42 @@ function setupEventListeners(panel) {
 
     
     sendWithAIBtn.addEventListener('click', () => {
-        if (activeElement) {
-            // const currentValue = activeElement.value;
-            const currentValue = activeElement.isContentEditable ? activeElement.innerText : activeElement.value;
-            
-            console.log('Current input value:', currentValue);
-            
+        if (selectedText) {
+            // 将选中的文本显示在 input 框中
+            capturedText.textContent = selectedText;
+             
             // Send data to local server
-            fetch('http://localhost:4000/save-input', {
+            fetch('http://localhost:4000/save-selected', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    input: currentValue,
+                    input: selectedText,
                     timestamp: new Date().toISOString()
                 })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                //     使用 formattedResult
-                //     const formattedResult = data.formattedResult;
-                //     console.log('Formatted result:', formattedResult);
-                    
-                //     // 更新 UI，将 formattedResult 显在 id="ReplacedText" 的框内
-                //     const replacedTextElement = document.getElementById('ReplacedText');
-                //     replacedTextElement.textContent = formattedResult; // 更新文本内容
-
-
-                    // 使用 ReplacedResult
-                    const ReplacedResult = data.ReplacedResult;
-                    console.log('Formatted result:', ReplacedResult);
-                    
-                    // 更新 UI，将 ReplacedResult 显示在 id="ReplacedText" 的框内
-                    const replacedTextElement = document.getElementById('ReplacedText');
-                    replacedTextElement.textContent = ReplacedResult; // 更新文本内容
+                    console.log('Selected text processed successfully');
+                    // 在 ReplacedText 框中显示还原后的文本
+                    replacedText.textContent = data.localReply;
                 } else {
                     console.error('Error:', data.message);
+                    replacedText.textContent = 'Error processing text';
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
+                replacedText.textContent = 'Error connecting to server';
             });
             
-            // 显示原始文本
-            capturedText.textContent = currentValue;
-
-            // originalValue = currentValue;
-            // activeElement.value = '[PRIVATE_DATA]';
+            // 可选：清空选中的文本
+            selectedText = '';
         } else {
-            capturedText.textContent = 'No input field selected';
-            replacedText.textContent = 'No input field selected';
+            capturedText.textContent = 'No text selected';
+            replacedText.textContent = 'No text selected';
         }
     });
 

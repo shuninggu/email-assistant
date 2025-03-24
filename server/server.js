@@ -8,7 +8,6 @@ import fs from 'fs';
 import path from 'path';
 import fetch from 'node-fetch'; 
 import dotenv from 'dotenv';
-// ✅ Import "xlsx" default export, rename to "xlsx"
 import xlsx from 'xlsx'; 
 
 // If using new openai v4 library
@@ -102,6 +101,12 @@ async function callGPT4(input) {
     throw error;
   }
 }
+
+// Start the server
+app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+    console.log(`Saving inputs to ${path.resolve('current_value.txt')}`);
+  });
 
 app.post('/save-input', async (req, res) => {
   // The user input from the frontend
@@ -218,14 +223,130 @@ app.post('/save-input', async (req, res) => {
   });
 });
 
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-  console.log(`Saving inputs to ${path.resolve('current_value.txt')}`);
+app.post('/save-selected', async (req, res) => {
+    // The user input from the frontend
+    // const { input } = req.body;
+
+    const { input, timestamp } = req.body;
+     // Save the selected text to a file
+     fs.appendFileSync('selected_text.txt', 
+        `\n[${timestamp}] Selected Text: ${input}`
+    );
+    
+    console.log('Received selected text:', input);
+  
+    // 1) Write user input to local file (optional)
+    fs.writeFileSync('current_value.txt', input);
+    console.log('Input saved locally:', input);
+  
+    // 2) Call local LLM
+    const localStart = Date.now();
+    let localReply = "";
+    try {
+      localReply = await callLocalLLM(input);
+    } catch (err) {
+      console.error("Local LLM call failed:", err);
+      localReply = "Local LLM Error";
+    }
+    const localEnd = Date.now();
+    const localElapsed = localEnd - localStart;
+  
+    console.log(`Local LLM completed in ${localElapsed} ms`);
+    console.log('Local LLM reply:', localReply);
+  
+    // 3) Call GPT-4
+    const gptStart = Date.now();
+    let gptReply = "";
+    try {
+      gptReply = await callGPT4(input);
+    } catch (err) {
+      console.error("GPT-4 call failed:", err);
+      gptReply = "GPT-4 Error";
+    }
+    const gptEnd = Date.now();
+    const gptElapsed = gptEnd - gptStart;
+  
+    console.log(`GPT-4 call completed in ${gptElapsed} ms`);
+    console.log('GPT-4 reply:', gptReply);
+  
+    // 4) Write to Excel
+    const filePath = 'results.xlsx';
+    let workbook;
+    let worksheet;
+  
+    // Check if file exists
+    if (fs.existsSync(filePath)) {
+      // Read existing workbook from disk
+      workbook = xlsx.readFile(filePath);
+      worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    } else {
+      // Create new workbook and worksheet with headers
+      workbook = xlsx.utils.book_new();
+      worksheet = xlsx.utils.aoa_to_sheet([
+        [
+          "Input_llama3.2:3b",
+          "ReplyEmail_llama3.2:3b",
+          "ProcessingTime(ms)_llama3.2:3b",
+          "Input_gpt4o",
+          "ReplyEmail_gpt4o",
+          "ProcessingTime(ms)_gpt4o"
+        ]
+      ]);
+      xlsx.utils.book_append_sheet(workbook, worksheet, 'Results');
+    }
+  
+    // Determine next row index for appending new data
+    const range = xlsx.utils.decode_range(worksheet['!ref']);
+    const nextRowIndex = range.e.r + 1;
+  
+    // Write local LLM info (3 columns)
+    // Column 0: Input to local LLM
+    const cellLocalInput = xlsx.utils.encode_cell({ r: nextRowIndex, c: 0 });
+    worksheet[cellLocalInput] = { t: 's', v: input };
+  
+    // Column 1: Local LLM reply
+    const cellLocalReply = xlsx.utils.encode_cell({ r: nextRowIndex, c: 1 });
+    worksheet[cellLocalReply] = { t: 's', v: localReply };
+  
+    // Column 2: Local LLM processing time
+    const cellLocalTime = xlsx.utils.encode_cell({ r: nextRowIndex, c: 2 });
+    worksheet[cellLocalTime] = { t: 'n', v: localElapsed };
+  
+    // Write GPT-4 info (3 columns)
+    // Column 3: Input for GPT-4
+    const cellGPTInput = xlsx.utils.encode_cell({ r: nextRowIndex, c: 3 });
+    worksheet[cellGPTInput] = { t: 's', v: input };
+  
+    // Column 4: GPT-4 reply
+    const cellGPTReply = xlsx.utils.encode_cell({ r: nextRowIndex, c: 4 });
+    worksheet[cellGPTReply] = { t: 's', v: gptReply };
+  
+    // Column 5: GPT-4 processing time
+    const cellGPTTime = xlsx.utils.encode_cell({ r: nextRowIndex, c: 5 });
+    worksheet[cellGPTTime] = { t: 'n', v: gptElapsed };
+  
+    // Update the worksheet range to include the new row
+    const newRange = {
+      s: { c: 0, r: 0 },
+      e: { c: 5, r: nextRowIndex }
+    };
+    worksheet['!ref'] = xlsx.utils.encode_range(newRange);
+  
+    // Write the updated workbook back to disk
+    xlsx.writeFile(workbook, filePath);
+    console.log(`✅ Successfully logged to Excel: ${filePath}`);
+  
+    // 5) Return response to frontend
+    return res.json({
+      success: true,
+      localReply: localReply,
+      localTime: localElapsed,
+      gptReply: gptReply,
+      gptTime: gptElapsed
+    });
 });
 
-
-app.post('/save-selected', async (req, res) => {
+app.post('/restore', async (req, res) => {
     const { selectedText, timestamp } = req.body;
     
     try {
@@ -336,3 +457,5 @@ function generateReplacedText(originalText, formattedResult) {
         return originalText; // If an error occurs, return the original text
     }
 }
+
+  
