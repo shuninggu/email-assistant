@@ -125,7 +125,7 @@ function createPanel() {
     `;
     
     panel.innerHTML = styles + `
-        <div class="title">Emaiil Assistant</div>
+        <div class="title">Email Assistant</div>
         <div class="button-container">
             <button id="getUserDraftBtn">Get User Draft</button>
             <button id="sendWithAIBtn">Send with AI</button>
